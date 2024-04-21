@@ -1,3 +1,6 @@
+using System;
+using System.Text;
+
 namespace WoWFileFormats
 {
     public partial class Form1 : Form
@@ -5,57 +8,109 @@ namespace WoWFileFormats
         public Form1()
         {
             InitializeComponent();
+
         }
 
+        const string filename = "lights.lit";
+        Dictionary<string, long> lightMap = new Dictionary<string, long>();
         private void button1_Click(object sender, EventArgs e)
         {
-            const string filename = "lights.lit";
+            
             BinaryReader bw = new BinaryReader(File.OpenRead(filename));
             UInt32 version = bw.ReadUInt32();
             Int32 lightCount = bw.ReadInt32();
             //Begin lightListData
-            Console.WriteLine("Version: {0}", printVersion(version));
+            Console.WriteLine("Version: {0}", version.ToString("X").Remove(1, 6).Insert(1, "."));
             Console.WriteLine("Number of lights: {0}", lightCount);
-
-            Dictionary<long, string> lightMap = new Dictionary<long, string>();
 
             for (int i = 0; i < lightCount; i++)
             {
                 long chunkPos = bw.BaseStream.Position;
-                //C2iVector
-                int m_chunkX = bw.ReadInt32();
-                int m_chunkY = bw.ReadInt32();
-                //C2iVector
+                
+                int m_chunkX = bw.ReadInt32(); // Always 0
+                int m_chunkY = bw.ReadInt32(); // Always 0
+                
                 Int32 m_chunkRadius = bw.ReadInt32();
-                //C3Vector - 3 floats x,y,z
+                
                 float cordinateX = bw.ReadSingle();
                 float cordinateY = bw.ReadSingle();
                 float cordinateZ = bw.ReadSingle();
-                //C3Vector
+                
                 float lightRadius = bw.ReadSingle();
                 float lightDropoff = bw.ReadSingle();
                 byte[] name = bw.ReadBytes(32);
 
-                lightMap.Add(chunkPos, System.Text.Encoding.ASCII.GetString(name));
-                Console.WriteLine("Light Name: {0}", System.Text.Encoding.Default.GetString(name));
-                Console.WriteLine("m_chunk x: {0}, y: {1}", m_chunkX, m_chunkY);
-                Console.WriteLine("m_chunkRadius: {0}", m_chunkRadius);
-                Console.WriteLine("Co-ordinates x: {0}, y: {1}, z: {2}", cordinateX, cordinateY, cordinateZ);
-                Console.WriteLine("Light Radius: {0}", lightRadius / 36);
-                Console.WriteLine("Light Dropoff: {0}", lightDropoff / 36);
-                Console.WriteLine("");
+                lightMap.Add(Encoding.ASCII.GetString(name), chunkPos);
+                Console.WriteLine($"Light Name: {Encoding.ASCII.GetString(name)}");
+                Console.WriteLine($"m_chunk x: {m_chunkX}, y: {m_chunkY}");
+                Console.WriteLine($"m_chunkRadius: {m_chunkRadius}");
+                Console.WriteLine($"Co-ordinates x: {cordinateX}, y: {cordinateY}, z: {cordinateZ}");
+                Console.WriteLine($"Light Radius: {lightRadius / 36}");
+                Console.WriteLine($"Light Dropoff: {lightDropoff / 36}\n");
             }
             foreach (var item in lightMap)
             {
-                litNameBox.Items.Add(item.Value); // When updating the names of lights Blizzard didn't overwrite names
-                                                  // correctly, leading to some extra parts of the overwritten name
-                                                  // remaining. We just ignore those extra bytes.
+                litNameBox.Items.Add(item.Key); // When updating the names of lights Blizzard didn't overwrite names
+                                                // correctly, leading to some extra parts of the overwritten name being displayed.
             }
+            bw.Close();
         }
 
-        static string printVersion(UInt32 num)
+        private void litNameBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            return num.ToString("X").Remove(1, 6).Insert(1, ".");
+            enableLightEditBoxes();
+            using (BinaryReader bw = new BinaryReader(File.OpenRead(filename)))
+            {
+                long chunkPos = lightMap[litNameBox.SelectedItem.ToString()];
+                var lightData = readChunk(bw, chunkPos);
+                lgtRadius.Text = lightData.lightRadius.ToString();
+                lgtDropoff.Text = lightData.lightDropoff.ToString();
+                xCoordBox.Text = lightData.cordinateX.ToString();
+                yCoordBox.Text = lightData.cordinateY.ToString();
+                zCoordBox.Text = lightData.cordinateZ.ToString();
+            }
+            
+        }
+
+        private LightListData readChunk(BinaryReader br, long pos)
+        {
+            br.BaseStream.Seek(pos, SeekOrigin.Begin);
+            
+            LightListData data = new LightListData();
+
+            data.m_chunkX = br.ReadInt32(); // Always 0
+            data.m_chunkY = br.ReadInt32(); // Always 0
+
+            data.m_chunkRadius = br.ReadInt32();
+
+            data.cordinateX = br.ReadSingle();
+            data.cordinateY = br.ReadSingle();
+            data.cordinateZ = br.ReadSingle();
+
+            data.lightRadius = br.ReadSingle();
+            data.lightDropoff = br.ReadSingle();
+
+            return data;
+        }
+
+        public struct LightListData
+        {
+            public int m_chunkX;
+            public int m_chunkY;
+            public Int32 m_chunkRadius;
+            public float cordinateX;
+            public float cordinateY;
+            public float cordinateZ;
+            public float lightRadius;
+            public float lightDropoff;
+        }
+        private void enableLightEditBoxes()
+        {
+            lgtRadius.ReadOnly = false;
+            lgtDropoff.ReadOnly = false;
+            xCoordBox.ReadOnly = false;
+            yCoordBox.ReadOnly = false;
+            zCoordBox.ReadOnly = false;
         }
     }
 }
